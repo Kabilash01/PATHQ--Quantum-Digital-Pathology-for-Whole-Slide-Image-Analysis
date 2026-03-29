@@ -1,0 +1,29 @@
+Digital pathology is the true last mile of cancer diagnosis. Every cancer detected in MRI or CT must eventually be confirmed by a tissue biopsy — a glass or digital slide that a pathologist reads under a microscope. This is called a Whole Slide Image (WSI). These slides are gigapixel in size (100,000 x 100,000 pixels), contain millions of individual cells, and require 30–60 minutes per slide for an expert pathologist to read.
+
+Problem 1 — The Global Pathologist Shortage
+India has approximately 1 pathologist per 5,000 patients in urban centres, and nearly zero in rural areas. Sub-Saharan Africa is worse. Cancer incidence is rising globally, and there are simply not enough trained pathologists to read the slides. AI is the only scalable answer — but current AI models have critical limitations.
+Problem 2 — The Gigapixel Computational Wall
+A single WSI can be 100,000 x 100,000 pixels — roughly 10 gigapixels. Classical deep learning models cannot process this as a whole. They must break the slide into thousands of small patches (tiles), analyse each one, then try to aggregate the results back into a slide-level diagnosis. This patch-and-aggregate pipeline loses spatial context and misses subtle inter-cellular relationships that a trained pathologist would naturally see at multiple magnifications simultaneously.
+Problem 3 — Rare Cancer Data Scarcity
+For common cancers (lung, breast, colon), there are thousands of labelled training slides. For rare cancers (salivary gland carcinoma, adrenal cortical tumours, paediatric sarcomas), there may be only 50–200 labelled slides in the entire world. Classical deep learning requires thousands of examples to generalize — making AI-assisted diagnosis of rare diseases practically impossible with current methods.
+Problem 4 — Stain Variability Across Hospitals
+Different hospitals use different staining protocols (Haematoxylin & Eosin, Masson's Trichrome, PAS, etc.) and different scanner hardware. A model trained on slides from Hospital A consistently fails on slides from Hospital B because the colour distributions are fundamentally different. This stain variability problem has no fully satisfying solution in the current literature.
+
+
+
+How PATHQ Solves It
+PATHQ proposes a three-layer Quantum-Graph-Transformer architecture that addresses each of the above problems simultaneously. Here is the step-by-step technical flow:
+
+Step 1 — WSI Ingestion and Patch Extraction
+The gigapixel slide is loaded using OpenSlide (an open-source library for reading digital pathology slides). The slide is divided into overlapping 256×256 pixel tiles at multiple magnification levels (5×, 10×, 20×). Each tile represents a local neighbourhood of cells. This is standard pre-processing and forms the classical foundation of the pipeline.
+Step 2 — Quantum Amplitude Encoding (THE NOVEL PART)
+Each 256×256 tile has 65,536 pixels. Instead of feeding this into a classical CNN which would need a large number of parameters to process this, PATHQ uses quantum amplitude encoding to map the pixel values into the probability amplitudes of a quantum state. A quantum state with just 16 qubits can represent 2^16 = 65,536 amplitudes simultaneously — this is the quantum advantage. The quantum circuit then applies a Variational Quantum Circuit (VQC) to extract features from this quantum-encoded tile in a parameter-efficient manner. This is especially powerful when training data is scarce, because quantum kernels generalise better from small datasets than classical neural networks.
+Step 3 — Quantum Graph Convolution Network (Q-GCN)
+After quantum feature extraction for each patch, PATHQ builds a spatial graph of the slide. Each patch becomes a node in a graph. Edges are created between patches that are spatially adjacent (neighbours on the slide). The graph captures which groups of cells are near each other — essential for understanding tumour microenvironments. PATHQ then applies a Quantum Graph Convolutional Network (Q-GCN), where the message-passing between neighbouring nodes is implemented using quantum entanglement operations. Entangled qubits can represent correlations between adjacent cells that classical graph convolution cannot efficiently capture.
+
+Step 4 — Quantum Multiple Instance Learning (Q-MIL)
+Multiple Instance Learning (MIL) is the standard approach in WSI AI — the slide is treated as a 'bag' of patches, and the model must identify which patches (instances) are tumour-positive without patch-level labels, using only slide-level labels (cancer / no cancer). PATHQ implements a quantum attention-based MIL aggregation where quantum interference is used to weight the importance of each patch. This allows the model to focus on the most diagnostically relevant regions of a slide automatically.
+Step 5 — Clinical Output with Explainability
+The final output is: (1) a slide-level diagnosis (cancer grade, e.g. Gleason 3+4 for prostate cancer), (2) a Grad-CAM++ heatmap overlaid on the slide showing which regions drove the decision, and (3) a calibrated uncertainty score so pathologists know when to trust the AI and when to review manually. The system integrates with QuPath, the most widely used open-source digital pathology viewer, for real clinical workflow integration.
+
+

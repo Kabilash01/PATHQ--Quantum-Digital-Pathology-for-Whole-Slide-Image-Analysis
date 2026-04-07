@@ -27,3 +27,22 @@ Step 5 — Clinical Output with Explainability
 The final output is: (1) a slide-level diagnosis (cancer grade, e.g. Gleason 3+4 for prostate cancer), (2) a Grad-CAM++ heatmap overlaid on the slide showing which regions drove the decision, and (3) a calibrated uncertainty score so pathologists know when to trust the AI and when to review manually. The system integrates with QuPath, the most widely used open-source digital pathology viewer, for real clinical workflow integration.
 
 
+
+Download a specific range (e.g. normal_001 to normal_050
+
+aws s3 sync --no-sign-request \
+  s3://camelyon-dataset/CAMELYON16/images/ ./camelyon16/images/ \
+  --exclude "*" \
+  --include "normal_00[1-9].tif" \
+  --include "normal_0[1-4][0-9].tif" \
+  --include "normal_050.tif"
+  
+  Download tumor slides
+  aws s3 sync --no-sign-request \
+  s3://camelyon-dataset/CAMELYON16/images/ ./camelyon16/images/ \
+  --exclude "*" --include "tumor_*.tif"
+  
+  Download test slides
+  aws s3 sync --no-sign-request \
+  s3://camelyon-dataset/CAMELYON16/images/ ./camelyon16/images/ \
+  --exclude "*" --include "test_*.tif"

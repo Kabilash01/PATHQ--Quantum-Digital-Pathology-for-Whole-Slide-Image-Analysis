@@ -27,10 +27,10 @@ conda activate pathq
 conda install -c conda-forge openslide -y
 ```
 
-### 2. Install PyTorch (RTX 5060 — CUDA 12.1)
+### 2. Install PyTorch (RTX 5060 — CUDA 12.8)
 
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
 
 ### 3. Install All Dependencies

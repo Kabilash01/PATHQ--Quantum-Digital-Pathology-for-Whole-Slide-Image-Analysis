@@ -4,7 +4,6 @@
 *VQC + Graph Neural Network + Three-Layer XAI on Gigapixel Tissue Slides*
 
 ---
-
 ## What PATHQ Does
 
 PATHQ detects cancer in whole slide tissue biopsy images (WSIs) using a three-layer architecture:
@@ -147,8 +146,4 @@ python pathq/train.py --mode classical --max_slides 10 --epochs 5 --no_wandb
 
 ## Author
 
-Kabi — Sri Ramachandra Faculty of Engineering and Technology, Chennai  
-AI/ML + Quantum Computing Research · 2025–2030
-
-**Supervisor:** Dr. Sathya A.  
-**Target:** MICCAI 2026 / IEEE TMI
+Kabi — kabilash0108@gmail.com

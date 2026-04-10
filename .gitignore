@@ -1,6 +1,7 @@
 # Data folders - too large for GitHub
 camelyon16/
 data/
+datas/
 notebooks/data/
 *.tif
 *.svs

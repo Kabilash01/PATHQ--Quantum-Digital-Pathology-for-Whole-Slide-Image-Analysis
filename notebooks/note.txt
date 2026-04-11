@@ -1,0 +1,76 @@
+# BEFORE:
+class VQCEncoder(nn.Module):
+    def __init__(self, in_dim=512, n_qubits=3, n_layers=2):  # ❌ 3 qubits, 2 layers
+        ...
+        dev = qml.device('default.qubit', wires=n_qubits)  # ❌ Slow CPU backend
+
+# AFTER:
+class VQCEncoder(nn.Module):
+    def __init__(self, in_dim=512, n_qubits=2, n_layers=1):  # ✅ 2 qubits, 1 layer
+        ...
+        try:
+            dev = qml.device('lightning.qubit', wires=n_qubits)  # ✅ 10x faster
+        except:
+            dev = qml.device('default.qubit', wires=n_qubits)  # fallback
+            
+            
+            # BEFORE:
+def __init__(self, ..., n_qubits=3, n_layers=2, ...):  # defaults: 3 qubits, 2 layers
+    ...
+    gnn_in = self.vqc.out_dim  # 11
+
+# AFTER:
+def __init__(self, ..., n_qubits=2, n_layers=1, ...):  # defaults: 2 qubits, 1 layer
+    ...
+    gnn_in = self.vqc.out_dim  # 6
+    
+    
+    # BEFORE:
+BAG_SIZE = 32  # 32 patches per bag
+
+# AFTER:
+BAG_SIZE = 16  # 16 patches per bag (HALVED)
+
+# BEFORE:
+print('EXPERIMENT 1: Classical vs Quantum — full training data')
+...
+epochs=40  # ❌ 40 epochs
+...
+model_q = PATHQHybrid(use_vqc=True, n_qubits=3, n_layers=2)  # ❌ 3-qubit
+
+# AFTER:
+print('EXPERIMENT 1: Classical vs Quantum — full training data (OPTIMIZED)')
+print('Expected training time: ~30-40 minutes (was 215 minutes)')
+...
+epochs=20  # ✅ REDUCED to 20
+...
+model_q = PATHQHybrid(use_vqc=True)  # ✅ Uses default 2-qubit, 1-layer
+
+# BEFORE:
+for n_layers in [1, 2, 3]:  # ❌ Tests all 3 layers
+    ...
+    epochs=30  # ❌ 30 epochs each
+    m = PATHQHybrid(..., n_qubits=3, n_layers=n_layers)  # 3 qubits
+
+# AFTER:
+for n_layers in [1, 2]:  # ✅ Tests only 1 and 2 (skip 3)
+    ...
+    epochs=15  # ✅ REDUCED to 15
+    m = PATHQHybrid(..., n_qubits=2, n_layers=n_layers)  # ✅ 2 qubits
+    
+    
+    
+    
+    
+    
+    # BEFORE:
+for pct in [0.20, 0.50, 1.00]:
+    ...
+    epochs=30  # ❌ 30 epochs
+    mq = PATHQHybrid(use_vqc=True, n_qubits=3, n_layers=2)  # ❌ 3-qubit, 2-layer
+
+# AFTER:
+for pct in [0.20, 0.50, 1.00]:
+    ...
+    epochs=15  # ✅ REDUCED to 15
+    mq = PATHQHybrid(use_vqc=True, n_qubits=2, n_layers=1)  # ✅ 2-qubit, 1-layer

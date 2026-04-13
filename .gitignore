@@ -8,10 +8,10 @@ notebooks/data/
 *.ndpi
 
 # Checkpoints and outputs
-checkpoints/
-outputs/
-*.pt
-*.pth
+#heckpoints/
+#utputs/
+#.pt
+#.pth
 
 # Python
 __pycache__/

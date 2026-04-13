@@ -1,0 +1,85 @@
+{
+  "classical_full": {
+    "auc": 0.5,
+    "f1": 0.0,
+    "loss": 0.0,
+    "sensitivity": 0.0,
+    "specificity": 0.0
+  },
+  "quantum_full": {
+    "auc": 0.5,
+    "f1": 0.0,
+    "loss": 0.0,
+    "sensitivity": 0.0,
+    "specificity": 0.0
+  },
+  "ablation_layers": {
+    "1": {
+      "auc": 0.5,
+      "f1": 0.0,
+      "loss": 0.0,
+      "sensitivity": 0.0,
+      "specificity": 0.0
+    },
+    "2": {
+      "auc": 0.5,
+      "f1": 0.0,
+      "loss": 0.0,
+      "sensitivity": 0.0,
+      "specificity": 0.0
+    }
+  },
+  "low_data": {
+    "0.2": {
+      "classical": {
+        "auc": 0.5,
+        "f1": 0.0,
+        "loss": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0
+      },
+      "quantum": {
+        "auc": 0.5,
+        "f1": 0.0,
+        "loss": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0
+      },
+      "delta": 0.0
+    },
+    "0.5": {
+      "classical": {
+        "auc": 0.5,
+        "f1": 0.0,
+        "loss": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0
+      },
+      "quantum": {
+        "auc": 0.5,
+        "f1": 0.0,
+        "loss": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0
+      },
+      "delta": 0.0
+    },
+    "1.0": {
+      "classical": {
+        "auc": 0.5,
+        "f1": 0.0,
+        "loss": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0
+      },
+      "quantum": {
+        "auc": 0.5,
+        "f1": 0.0,
+        "loss": 0.0,
+        "sensitivity": 0.0,
+        "specificity": 0.0
+      },
+      "delta": 0.0
+    }
+  }
+}

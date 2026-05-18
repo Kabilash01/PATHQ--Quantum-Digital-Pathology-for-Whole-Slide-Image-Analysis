@@ -53,13 +53,19 @@ def get_splits(slides_dir, train_r=0.70, val_r=0.15, seed=42):
 
 
 def build_graph_v2(features: torch.Tensor, coords: torch.Tensor,
-                   label: int, k: int = 8, pos_enc_dim: int = 16) -> Data:
+                   label: int, k: int = 8, pos_enc_dim: int = 16,
+                   max_patches: int = 128) -> Data:
     """
     Build PyG graph.
     - Node features: UNI(1024) + pos.enc(16) = (N, 1040)
     - Edge features: [dist, cosine_sim] = (E, 2)
     """
     N = features.shape[0]
+    if max_patches is not None and N > max_patches:
+        idx = torch.randperm(N)[:max_patches]
+        features = features[idx]
+        coords   = coords[idx]
+        N        = max_patches
     pos_enc       = sinusoidal_pos_encoding(coords, d_model=pos_enc_dim)
     node_features = torch.cat([features.float(), pos_enc], dim=1)  # (N, 1040)
 
@@ -93,10 +99,11 @@ class CAMELYON16GraphDataset(PyGDataset):
     Loads pre-extracted UNI feature .pt files and builds graphs.
     Each .pt file must contain: {'features': (N,1024), 'coords': (N,2)}
     """
-    def __init__(self, slide_items, features_dir: Path, k=8):
+    def __init__(self, slide_items, features_dir: Path, k=8, max_patches=3000):
         self.items        = slide_items
         self.features_dir = features_dir
         self.k            = k
+        self.max_patches  = max_patches
         valid = []
         for path, label in slide_items:
             sid = Path(path).stem
@@ -114,10 +121,11 @@ class CAMELYON16GraphDataset(PyGDataset):
     def get(self, idx):
         path, label, fp = self.valid[idx]
         d = torch.load(fp, weights_only=False)
-        return build_graph_v2(d['features'], d['coords'], label, self.k)
+        return build_graph_v2(d['features'], d['coords'], label, self.k,
+                              max_patches=self.max_patches)
 
 
-def get_loaders_from_features(features_dir, batch_size=4, k=8, seed=42, num_workers=0):
+def get_loaders_from_features(features_dir, batch_size=4, k=8, seed=42, num_workers=0, max_patches=3000):
     """
     Load all pre-extracted UNI features and split into train/val/test.
     Used when features are pre-computed from patch extraction.
@@ -148,9 +156,10 @@ def get_loaders_from_features(features_dir, batch_size=4, k=8, seed=42, num_work
 
     # Build dataset from feature files
     class SimpleGraphDataset(PyGDataset):
-        def __init__(self, feature_paths, labels_list, k=8):
-            self.pairs = list(zip(feature_paths, labels_list))
-            self.k = k
+        def __init__(self, feature_paths, labels_list, k=8, max_patches=3000):
+            self.pairs       = list(zip(feature_paths, labels_list))
+            self.k           = k
+            self.max_patches = max_patches
             super().__init__(root=None)
 
         def len(self):
@@ -159,11 +168,12 @@ def get_loaders_from_features(features_dir, batch_size=4, k=8, seed=42, num_work
         def get(self, idx):
             fp, label = self.pairs[idx]
             d = torch.load(fp, weights_only=False)
-            return build_graph_v2(d['features'], d['coords'], label, self.k)
+            return build_graph_v2(d['features'], d['coords'], label, self.k,
+                                  max_patches=self.max_patches)
 
-    train_ds = SimpleGraphDataset(tr_p, tr_l, k)
-    val_ds   = SimpleGraphDataset(va_p, va_l, k)
-    test_ds  = SimpleGraphDataset(te_p, te_l, k)
+    train_ds = SimpleGraphDataset(tr_p, tr_l, k, max_patches)
+    val_ds   = SimpleGraphDataset(va_p, va_l, k, max_patches)
+    test_ds  = SimpleGraphDataset(te_p, te_l, k, max_patches)
 
     return (
         PyGLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=num_workers),

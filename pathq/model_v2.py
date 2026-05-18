@@ -4,7 +4,7 @@ QuantaPath v2 — UNI + positional encoding + VQC + GAT-Transformer
 
 Architecture:
     (N, 1040) node features [UNI 1024 + pos.enc 16]
-        -> [Optional VQC on UNI part only] -> (N, 27) or (N, 1040)
+        -> [Optional VQC on UNI part only] -> (N, 22) or (N, 1040)
         -> Linear projection -> (N, hidden=256)
         -> GATMambaBlock (GAT local + Transformer global, fused)
         -> Global mean pooling -> (B, hidden)
@@ -23,52 +23,60 @@ print('[model_v2] Using Transformer for global branch')
 
 class VQCEncoder(nn.Module):
     """
-    VQC encoder: UNI(1024) -> proj(8) -> AmplitudeEmbedding -> VQC -> measure(3)
-    Output: concat(proj_8, quantum_3) = 11-dim hybrid features
+    VQC encoder using AngleEmbedding: UNI(1024) -> proj(3) -> AngleEmbedding -> VQC -> measure(3)
+    Output: concat(proj_3, quantum_3) = 6-dim hybrid features
+
+    AngleEmbedding encodes n values as rotation angles on n qubits — no norm-1 constraint,
+    no MottonenStatePreparation decomposition, no NaN from normalization.
+    parameter-shift gradient works directly on rotation gates.
     """
     def __init__(self, in_dim=1024, n_qubits=3, n_layers=2):
         super().__init__()
         self.n_qubits = n_qubits
-        self.vqc_dim  = 2 ** n_qubits   # 8
 
+        # Project to n_qubits (AngleEmbedding takes one value per qubit)
         self.proj = nn.Sequential(
-            nn.Linear(in_dim, self.vqc_dim),
-            nn.Tanh(),
+            nn.Linear(in_dim, n_qubits),
+            nn.Tanh(),   # bounds to [-1, 1] → safe rotation angles
         )
 
         try:
-            dev = qml.device('lightning.qubit', wires=n_qubits)
-            print(f'[VQC] lightning.qubit ({n_qubits}q, {n_layers}L)')
+            dev = qml.device('lightning.gpu', wires=n_qubits)
+            diff_method = 'adjoint'
+            print(f'[VQC] lightning.gpu ({n_qubits}q, {n_layers}L) — adjoint gradients')
         except Exception:
-            dev = qml.device('default.qubit', wires=n_qubits)
-            print('[VQC] default.qubit (install pennylane-lightning for 10x speedup)')
+            try:
+                dev = qml.device('lightning.qubit', wires=n_qubits)
+                diff_method = 'adjoint'
+                print(f'[VQC] lightning.qubit ({n_qubits}q, {n_layers}L) — adjoint gradients')
+            except Exception:
+                dev = qml.device('default.qubit', wires=n_qubits)
+                diff_method = 'parameter-shift'
+                print(f'[VQC] default.qubit ({n_qubits}q, {n_layers}L) — parameter-shift')
 
-        @qml.qnode(dev, interface='torch', diff_method='finite-diff')
+        @qml.qnode(dev, interface='torch', diff_method=diff_method)
         def circuit(inputs, weights):
-            qml.AmplitudeEmbedding(inputs, wires=range(n_qubits), normalize=True)
+            qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation='Y')
             for l in range(n_layers):
-                for q in range(n_qubits): qml.RY(weights[l,0,q], wires=q)
-                for q in range(n_qubits): qml.RZ(weights[l,1,q], wires=q)
-                for q in range(n_qubits-1): qml.CNOT(wires=[q,q+1])
-                qml.CNOT(wires=[n_qubits-1, 0])
+                for q in range(n_qubits): qml.RY(weights[l, 0, q], wires=q)
+                for q in range(n_qubits): qml.RZ(weights[l, 1, q], wires=q)
+                for q in range(n_qubits - 1): qml.CNOT(wires=[q, q + 1])
+                qml.CNOT(wires=[n_qubits - 1, 0])
             return [qml.expval(qml.PauliZ(q)) for q in range(n_qubits)]
 
         self.vqc = qml.qnn.TorchLayer(circuit, {'weights': (n_layers, 2, n_qubits)})
-        self.out_dim = self.vqc_dim + n_qubits   # 11
+        self.out_dim = n_qubits + n_qubits   # proj(3) + quantum(3) = 6
 
-    def forward(self, x):
-        p = self.proj(x)  # (B, 8)
-        p_norm = F.normalize(p, p=2, dim=1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        p = self.proj(x)   # (N, 3) — bounded by Tanh, no normalization needed
 
-        # Process samples individually - squeeze to 1D to avoid PennyLane batching
         vqc_outputs = []
-        for i in range(p_norm.shape[0]):
-            vqc_in = p_norm[i]  # (8,) - truly 1D
-            vqc_out = self.vqc(vqc_in)  # (3,)
-            vqc_outputs.append(vqc_out.unsqueeze(0))  # (1, 3)
-        vqc_all = torch.cat(vqc_outputs, dim=0)  # (B, 3)
+        for i in range(p.shape[0]):
+            out = self.vqc(p[i])               # (3,)
+            vqc_outputs.append(out.unsqueeze(0))
+        q_out = torch.cat(vqc_outputs, dim=0)  # (N, 3)
 
-        return torch.cat([p, vqc_all], dim=1)  # (B, 11)
+        return torch.cat([p, q_out], dim=1)    # (N, 6)
 
 
 class GATMambaBlock(nn.Module):
@@ -147,14 +155,14 @@ class QuantaPathV2(nn.Module):
         vqc_layers= 2,
         n_classes = 2,
         use_vqc   = True,
-        dropout   = 0.3,
+        dropout   = 0.4,
     ):
         super().__init__()
         self.use_vqc = use_vqc
 
         if use_vqc:
             self.vqc = VQCEncoder(in_dim=1024, n_qubits=n_qubits, n_layers=vqc_layers)
-            proj_in  = self.vqc.out_dim + 16   # 11 + 16 = 27
+            proj_in  = self.vqc.out_dim + 16   # 6 + 16 = 22
         else:
             self.vqc = None
             proj_in  = in_dim                  # 1040
@@ -185,7 +193,7 @@ class QuantaPathV2(nn.Module):
         pe   = x[:, 1024:]        # positional encoding
 
         if self.use_vqc:
-            x_in = torch.cat([self.vqc(uni), pe], dim=1)   # (N, 27)
+            x_in = torch.cat([self.vqc(uni), pe], dim=1)   # (N, 22)
         else:
             x_in = x                                        # (N, 1040)
 

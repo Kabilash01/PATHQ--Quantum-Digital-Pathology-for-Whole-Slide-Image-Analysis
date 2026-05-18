@@ -68,15 +68,17 @@ class VQCEncoder(nn.Module):
         self.out_dim = n_qubits + n_qubits   # proj(3) + quantum(3) = 6
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        p = self.proj(x)   # (N, 3) — bounded by Tanh, no normalization needed
+        p = self.proj(x)   # (N, n_qubits) — bounded by Tanh
 
         vqc_outputs = []
         for i in range(p.shape[0]):
-            out = self.vqc(p[i])               # (3,)
+            out = self.vqc(p[i])
             vqc_outputs.append(out.unsqueeze(0))
-        q_out = torch.cat(vqc_outputs, dim=0)  # (N, 3)
+            if i % 50 == 49 and x.device.type == 'cuda':
+                torch.cuda.empty_cache()
+        q_out = torch.cat(vqc_outputs, dim=0)
 
-        return torch.cat([p, q_out], dim=1)    # (N, 6)
+        return torch.cat([p, q_out], dim=1)
 
 
 class GATMambaBlock(nn.Module):

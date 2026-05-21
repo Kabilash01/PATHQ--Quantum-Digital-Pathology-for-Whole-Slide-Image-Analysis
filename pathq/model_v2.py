@@ -160,14 +160,15 @@ class QuantaPathV2(nn.Module):
         dropout   = 0.4,
     ):
         super().__init__()
-        self.use_vqc = use_vqc
+        self.use_vqc  = use_vqc
+        self.feat_dim = in_dim - 16   # feature dim without pos_enc (1024 UNI, 512 ResNet)
 
         if use_vqc:
-            self.vqc = VQCEncoder(in_dim=1024, n_qubits=n_qubits, n_layers=vqc_layers)
+            self.vqc = VQCEncoder(in_dim=self.feat_dim, n_qubits=n_qubits, n_layers=vqc_layers)
             proj_in  = self.vqc.out_dim + 16   # 6 + 16 = 22
         else:
             self.vqc = None
-            proj_in  = in_dim                  # 1040
+            proj_in  = in_dim                  # 1040 or 528
 
         self.input_proj = nn.Sequential(
             nn.Linear(proj_in, hidden),
@@ -191,8 +192,8 @@ class QuantaPathV2(nn.Module):
         ea = getattr(batch, 'edge_attr', None)   # (E, 2)
         bi = batch.batch
 
-        uni  = x[:, :1024]        # UNI features
-        pe   = x[:, 1024:]        # positional encoding
+        uni  = x[:, :self.feat_dim]   # feature part (1024 UNI or 512 ResNet)
+        pe   = x[:, self.feat_dim:]   # positional encoding (last 16 dims)
 
         if self.use_vqc:
             x_in = torch.cat([self.vqc(uni), pe], dim=1)   # (N, 22)

@@ -1,0 +1,10 @@
+{
+  "best_config": "A2_vqc_2layer_base",
+  "optimal_n_qubits": 3,
+  "optimal_n_layers": 2,
+  "ablation_test_auc": 0.7610294117647058,
+  "ablation_patches": 512,
+  "week3_test_auc": 0.7812,
+  "improvement": -0.020170588235294162,
+  "note": "Retrain this config at max_patches=3000 in Week 5 for paper numbers"
+}

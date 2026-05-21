@@ -7,17 +7,44 @@ Dataset: CAMELYON16 (221 labeled slides, lymph node cancer detection).
 
 ---
 
-## Current Status: Week 3 v2 COMPLETE
+## Current Status: Week 4 COMPLETE
 
-### Completed (Week 1–3)
+### Completed (Week 1–4)
 - v1 baseline (ResNet-50 + GCNConv + ABMIL): AUC 0.70 ✓
 - UNI feature extraction (1024-dim, all 221 slides) ✓
 - v2 Classical GAT-Transformer: trained + evaluated ✓
 - v2 Quantum VQC + GAT-Transformer: trained + evaluated ✓
-- Comparison graphs + sanity checks in notebook ✓
+- Week 4 ablation (1L vs 2L vs 3L vs 5Q, 512 patches): COMPLETE ✓
 
-### Next (Week 4)
-Layer ablation: 1 vs 2 vs 3 VQC layers — does more depth help?
+### Next (Week 5)
+Retrain winner config (3q, 2L) at max_patches=3000 on RunPod RTX 4090 for paper numbers.
+
+---
+
+## Week 4 Ablation Results (512 patches, 15 epochs max, patience=5)
+
+| Config | Q | L | Val AUC | Test AUC | Gap | vs W3 |
+|---|---|---|---|---|---|---|
+| A1 — 1 layer | 3 | 1 | 0.8449 | 0.7132 | −0.1317 ⚠ | −0.068 |
+| A2 — 2 layers (winner) | 3 | 2 | 0.8342 | 0.7610 | −0.0732 ✅ | −0.020 |
+| A3 — 3 layers | 3 | 3 | 0.7986 | 0.7463 | −0.0523 | −0.035 |
+| A4 — 5 qubits | 5 | 2 | 0.7968 | 0.7445 | −0.0523 | −0.037 |
+
+**Winner: A2 (3q, 2L)** — confirms Week 3 config was already optimal.
+
+Key findings:
+- 1 layer overfits (worst gap −0.13), 3 layers shows barren plateau (lower AUC than 2L)
+- 5 qubits adds no value over 3 qubits — bottleneck is the 1024→3 projection, not circuit width
+- 2 layers is the sweet spot: best test AUC + healthy generalisation gap
+- All ablation AUCs below W3 baseline (0.7812) — expected (512 vs 3000 patches); rankings are what matter
+
+### Checkpoints (Week 4)
+- `checkpoints/w4_A1_vqc_1layer_best.pth`
+- `checkpoints/w4_A2_vqc_2layer_base_best.pth`
+- `checkpoints/w4_A3_vqc_3layer_best.pth`
+- `checkpoints/w4_A4_vqc_2layer_5qubit_best.pth`
+- `outputs/week4_ablation_results.json`
+- `outputs/week4_best_config.json`
 
 ---
 

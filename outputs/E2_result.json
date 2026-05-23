@@ -1,0 +1,15 @@
+{
+  "experiment": "E2_quantum_restart",
+  "max_patches": 1024,
+  "dropout": 0.5,
+  "weight_decay": 0.01,
+  "label_smooth": 0.1,
+  "patience": 8,
+  "auc": 0.685121,
+  "f1": 0.6875,
+  "loss": 0.675824,
+  "sensitivity": 0.6471,
+  "specificity": 0.7647,
+  "val_auc": 0.650735,
+  "gap": 0.034386
+}

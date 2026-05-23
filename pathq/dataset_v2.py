@@ -136,10 +136,19 @@ def get_loaders_from_features(features_dir, batch_size=4, k=8, seed=42, num_work
     if len(all_features) == 0:
         raise ValueError(f"No features found in {features_dir}")
 
+    # Keep only labeled slides — skip CAMELYON16 official test_* (no GT in filename,
+    # otherwise they all silently become label=0 and pollute training).
+    n_before = len(all_features)
+    all_features = [fp for fp in all_features
+                    if fp.stem.startswith(('normal_', 'tumor_'))]
+    n_skipped = n_before - len(all_features)
+    if n_skipped > 0:
+        print(f'  Skipped {n_skipped} unlabeled file(s) (e.g. test_*) — keeping {len(all_features)} labeled slides')
+
     # Parse labels from filenames (normal_xxx -> 0, tumor_xxx -> 1)
     paths, labels = [], []
     for fp in all_features:
-        label = 1 if 'tumor' in fp.stem else 0
+        label = 1 if fp.stem.startswith('tumor_') else 0
         paths.append(fp)
         labels.append(label)
 

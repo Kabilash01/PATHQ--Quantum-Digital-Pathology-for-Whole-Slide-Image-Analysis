@@ -86,11 +86,12 @@ def _load_model(use_vqc, ckpt_path, device=DEVICE):
 
 # ── Slide list helper ──────────────────────────────────────────────────────────
 def _get_slide_files():
-    """Return (normal_files, tumor_files) from features dir."""
-    all_pt = list(FEAT_DIR.glob('*.pt')) if FEAT_DIR.exists() else []
+    """Return (normal_files, tumor_files, test_files) from features dir."""
+    all_pt  = list(FEAT_DIR.glob('*.pt')) if FEAT_DIR.exists() else []
     normals = sorted([f for f in all_pt if f.name.startswith('normal_')])
     tumors  = sorted([f for f in all_pt if f.name.startswith('tumor_')])
-    return normals, tumors
+    tests   = sorted([f for f in all_pt if f.name.startswith('test_')])
+    return normals, tumors, tests
 
 
 # ── Lazy model cache ───────────────────────────────────────────────────────────
@@ -118,7 +119,13 @@ def _build_graph_from_pt(pt_path, max_patches=512):
     feat_dict = torch.load(pt_path, map_location='cpu', weights_only=False)
     features = feat_dict['features']   # (N, 1024)
     coords   = feat_dict['coords']     # (N, 2)
-    label    = 0 if pt_path.name.startswith('normal_') else 1
+    # test_* slides have no ground-truth — treat as label=0 (unknown)
+    if pt_path.name.startswith('normal_'):
+        label = 0
+    elif pt_path.name.startswith('tumor_'):
+        label = 1
+    else:
+        label = 0   # test_* or unknown — no GT available
     data = build_graph_v2(features, coords, label, max_patches=max_patches)
     return data
 
@@ -131,15 +138,20 @@ def run_prediction(slide_choice, threshold):
     Returns: (fig_prob, fig_heatmap, info_text)
     """
     slide_type, idx = _parse_slide_choice(slide_choice)
-    normals, tumors = _get_slide_files()
-    files = normals if slide_type == 'Normal' else tumors
+    normals, tumors, tests = _get_slide_files()
+    if slide_type == 'Normal':
+        files = normals
+    elif slide_type == 'Test':
+        files = tests
+    else:
+        files = tumors
 
     if not files:
         return None, None, "❌ No slide files found in features_uni/"
 
     idx = max(0, min(idx, len(files) - 1))
     pt_path = files[idx]
-    true_label = 0 if slide_type == 'Normal' else 1
+    true_label = 0 if slide_type == 'Normal' else (None if slide_type == 'Test' else 1)
 
     t0 = time.time()
     try:
@@ -157,7 +169,13 @@ def run_prediction(slide_choice, threshold):
 
     # Apply threshold: predict Tumor if tumor_prob >= threshold
     pred_label = 1 if probs[1] >= threshold else 0
-    correct = (pred_label == true_label)
+    # For test_* slides there's no ground truth → correct = None
+    if true_label is None:
+        correct = None
+        verdict_str = '⚪ No GT'
+    else:
+        correct = (pred_label == true_label)
+        verdict_str = '✅ Correct' if correct else '❌ Wrong'
     elapsed = time.time() - t0
 
     # ── Figure 1: Probability bars ─────────────────────────────────────────
@@ -173,7 +191,7 @@ def run_prediction(slide_choice, threshold):
     ax.set_xlabel('Probability (%)', fontsize=11)
     ax.set_title(
         f'Slide: {pt_path.name}\n'
-        f'Prediction: {"✅ Correct" if correct else "❌ Wrong"} — '
+        f'Prediction: {verdict_str} — '
         f'{"Tumor" if pred_label else "Normal"} '
         f'(threshold={threshold:.2f})',
         fontsize=11, pad=10
@@ -220,11 +238,13 @@ def run_prediction(slide_choice, threshold):
     ax2.spines[['top', 'right']].set_visible(False)
     fig_heat.tight_layout()
 
+    gt_str = 'Unknown (no GT)' if true_label is None else slide_type
+    correct_str = '⚪ N/A' if correct is None else ('✅' if correct else '❌')
     info = (
         f"**Slide:** `{pt_path.name}`\n\n"
-        f"**True label:** {slide_type}  |  "
+        f"**True label:** {gt_str}  |  "
         f"**Predicted:** {'Tumor' if pred_label else 'Normal'}  |  "
-        f"**Correct:** {'✅' if correct else '❌'}\n\n"
+        f"**Correct:** {correct_str}\n\n"
         f"**Normal prob:** {probs[0]*100:.1f}%  |  "
         f"**Tumor prob:** {probs[1]*100:.1f}%\n\n"
         f"**Model:** Quantum VQC+GAT (3q, 2L)  |  "
@@ -249,7 +269,12 @@ def run_prediction_from_upload(file_obj, threshold):
         return None, None, f"❌ Uploaded file not found: {pt_path}"
 
     # Infer slide_type from filename; default to Tumor if ambiguous
-    slide_type = 'Normal' if pt_path.name.startswith('normal') else 'Tumor'
+    if pt_path.name.startswith('normal'):
+        slide_type = 'Normal'
+    elif pt_path.name.startswith('test_'):
+        slide_type = 'Test'
+    else:
+        slide_type = 'Tumor'
 
     try:
         import torch
@@ -264,8 +289,12 @@ def run_prediction_from_upload(file_obj, threshold):
         return None, None, f"❌ Failed to load .pt file: {e}"
 
     # Build a fake dropdown choice string so we reuse run_prediction logic
-    fake_choice = f"Normal [0] — {pt_path.name}" if slide_type == 'Normal' \
-                  else f"Tumor  [0] — {pt_path.name}"
+    if slide_type == 'Normal':
+        fake_choice = f"Normal [0] — {pt_path.name}"
+    elif slide_type == 'Test':
+        fake_choice = f"Test   [0] — {pt_path.name}"
+    else:
+        fake_choice = f"Tumor  [0] — {pt_path.name}"
 
     # Temporarily symlink uploaded file into features_uni dir so _build_graph_from_pt finds it
     dest = FEAT_DIR / pt_path.name
@@ -278,9 +307,11 @@ def run_prediction_from_upload(file_obj, threshold):
             copied = False
 
         # Override normals/tumors list temporarily
-        normals, tumors = _get_slide_files()
+        normals, tumors, tests = _get_slide_files()
         if slide_type == 'Normal':
             files_override = [dest] + normals
+        elif slide_type == 'Test':
+            files_override = [dest] + tests
         else:
             files_override = [dest] + tumors
 
@@ -288,7 +319,7 @@ def run_prediction_from_upload(file_obj, threshold):
         from pathq.dataset_v2 import build_graph_v2
         features = feat_dict['features']
         coords   = feat_dict['coords']
-        label    = 0 if slide_type == 'Normal' else 1
+        label    = 0 if slide_type == 'Normal' else (0 if slide_type == 'Test' else 1)
         data = build_graph_v2(features, coords, label, max_patches=512)
 
     except Exception as e:
@@ -497,13 +528,17 @@ def run_full_evaluation():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _get_vqc_grads_for_slide(pt_path, true_label, model):
-    """Compute VQC weight gradients for one slide. Returns grad tensor (2,2,3)."""
+    """Compute VQC weight gradients for one slide. Returns grad tensor (2,2,3).
+    Uses true_label as the target class; falls back to predicted class for test_* (no GT).
+    """
     data = _build_graph_from_pt(pt_path, max_patches=256).to(DEVICE)
     batch_obj = Batch.from_data_list([data])
     for p in model.parameters():
         p.requires_grad_(True)
     logits, _ = model(batch_obj)
-    score = torch.softmax(logits, dim=1)[0, true_label]
+    probs = torch.softmax(logits, dim=1)[0]
+    target_class = int(probs.argmax().item()) if true_label is None else true_label
+    score = probs[target_class]
     score.backward()
     grads = {}
     for k, p in model.named_parameters():
@@ -572,9 +607,9 @@ def _generate_xai_explanation(slide_name, true_label, pred_label, prob_tumor,
     saliency : numpy (N,)   — attention scores 0..1
     grad_w   : numpy (2,2,3) — VQC weight gradients
     """
-    true_str = 'Tumor' if true_label == 1 else 'Normal'
+    true_str = 'Unknown (no GT)' if true_label is None else ('Tumor' if true_label == 1 else 'Normal')
     pred_str  = 'Tumor' if pred_label == 1 else 'Normal'
-    correct   = true_label == pred_label
+    correct   = None if true_label is None else (true_label == pred_label)
 
     # ── VQC gradient stats ─────────────────────────────────────────────────
     abs_w   = np.abs(grad_w)
@@ -596,7 +631,7 @@ def _generate_xai_explanation(slide_name, true_label, pred_label, prob_tumor,
     confidence = 'HIGH' if prob_tumor > 0.7 or prob_tumor < 0.3 else \
                  'MODERATE' if prob_tumor > 0.55 or prob_tumor < 0.45 else 'LOW'
 
-    verdict_icon = '✅' if correct else '❌'
+    verdict_icon = '⚪' if correct is None else ('✅' if correct else '❌')
 
     # ── Build spatial section ──────────────────────────────────────────────
     if spatial and pred_label == 1:
@@ -670,7 +705,7 @@ The model found no significant evidence of metastatic invasion across {patch_cou
 | | |
 |---|---|
 | **True label** | {true_str} |
-| **Predicted** | {pred_str} &nbsp; {verdict_icon} {'Correct' if correct else 'Incorrect'} |
+| **Predicted** | {pred_str} &nbsp; {verdict_icon} {'N/A (no GT)' if correct is None else ('Correct' if correct else 'Incorrect')} |
 | **Tumor probability** | **{prob_tumor*100:.1f}%** |
 | **Normal probability** | **{(1-prob_tumor)*100:.1f}%** |
 | **Confidence** | **{confidence}** |
@@ -712,15 +747,20 @@ def run_quantum_xai(slide_choice, threshold):
     Tab 3 callback — slide-specific XAI.
     Returns: (fig_heatmap, fig_gradients, explanation_md)
     """
-    normals, tumors = _get_slide_files()
+    normals, tumors, tests = _get_slide_files()
     if not normals or not tumors:
         return None, None, "❌ No slide files found in features_uni/"
 
     slide_type, idx = _parse_slide_choice(slide_choice)
-    files = normals if slide_type == 'Normal' else tumors
+    if slide_type == 'Normal':
+        files = normals
+    elif slide_type == 'Test':
+        files = tests
+    else:
+        files = tumors
     idx = max(0, min(idx, len(files) - 1))
     pt_path = files[idx]
-    true_label = 0 if slide_type == 'Normal' else 1
+    true_label = 0 if slide_type == 'Normal' else (None if slide_type == 'Test' else 1)
 
     model = _get_quantum_model()
 
@@ -789,7 +829,8 @@ def run_quantum_xai(slide_choice, threshold):
         )
 
     verdict = f"{'🔴 TUMOR' if pred_label==1 else '🟢 NORMAL'} ({probs[1]*100:.1f}% tumor prob)"
-    correct_str = '✅ Correct' if pred_label == true_label else '❌ Wrong'
+    correct_str = ('⚪ No GT' if true_label is None
+                   else '✅ Correct' if pred_label == true_label else '❌ Wrong')
     ax.set_title(
         f'Spatial Attention Map — {pt_path.name}\n'
         f'Prediction: {verdict}  |  {correct_str}',
@@ -984,10 +1025,11 @@ RESULTS_HTML = """
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _make_slide_choices():
-    normals, tumors = _get_slide_files()
+    normals, tumors, tests = _get_slide_files()
     choices = (
-        [f"Normal — {f.name}" for f in normals[:10]] +
-        [f"Tumor  — {f.name}" for f in tumors[:10]]
+        [f"Normal [{i}] — {f.name}" for i, f in enumerate(normals)] +
+        [f"Tumor  [{i}] — {f.name}" for i, f in enumerate(tumors)] +
+        [f"Test   [{i}] — {f.name}" for i, f in enumerate(tests)]
     )
     return choices if choices else ["(no slides found)"]
 
@@ -995,22 +1037,33 @@ def _make_slide_choices():
 import gradio as gr
 
 # ── Shared slide dropdown builder ──────────────────────────────────────────────
-normals_global, tumors_global = _get_slide_files()
+normals_global, tumors_global, tests_global = _get_slide_files()
 n_normals = len(normals_global)
 n_tumors  = len(tumors_global)
+n_tests   = len(tests_global)
 
 
 def _parse_slide_choice(choice_str):
     """Parse 'Normal [0] — filename.pt' → (slide_type, index)."""
-    # Extract the number between [ and ]
     idx_str = choice_str.split('[')[1].split(']')[0] if '[' in choice_str else '0'
-    slide_type = 'Normal' if choice_str.startswith('Normal') else 'Tumor'
+    if choice_str.startswith('Normal'):
+        slide_type = 'Normal'
+    elif choice_str.startswith('Tumor'):
+        slide_type = 'Tumor'
+    else:
+        slide_type = 'Test'
     return slide_type, int(idx_str)
 
 
+normals_global, tumors_global, tests_global = _get_slide_files()
+n_normals = len(normals_global)
+n_tumors  = len(tumors_global)
+n_tests   = len(tests_global)
+
 slide_choices_normal = [f"Normal [{i}] — {f.name}" for i, f in enumerate(normals_global)]
 slide_choices_tumor  = [f"Tumor  [{i}] — {f.name}" for i, f in enumerate(tumors_global)]
-all_slide_choices    = slide_choices_normal + slide_choices_tumor
+slide_choices_test   = [f"Test   [{i}] — {f.name}" for i, f in enumerate(tests_global)]
+all_slide_choices    = slide_choices_normal + slide_choices_tumor + slide_choices_test
 
 
 def view_pt_file(slide_choice, threshold):
@@ -1020,11 +1073,16 @@ def view_pt_file(slide_choice, threshold):
     Returns: (fig, info_md)
     """
     slide_type, idx = _parse_slide_choice(slide_choice)
-    normals_v, tumors_v = _get_slide_files()
-    files = normals_v if slide_type == 'Normal' else tumors_v
+    normals_v, tumors_v, tests_v = _get_slide_files()
+    if slide_type == 'Normal':
+        files = normals_v
+    elif slide_type == 'Test':
+        files = tests_v
+    else:
+        files = tumors_v
     idx = max(0, min(idx, len(files) - 1))
     pt_path = files[idx]
-    true_label = 0 if slide_type == 'Normal' else 1
+    true_label = 0 if slide_type == 'Normal' else (None if slide_type == 'Test' else 1)
 
     # ── Load features ──────────────────────────────────────────────────────
     try:
@@ -1063,7 +1121,7 @@ def view_pt_file(slide_choice, threshold):
         sal = np.linalg.norm(feats_v[:len(coords_used)], axis=1)
         sal = (sal - sal.min()) / (sal.max() - sal.min() + 1e-8)
         probs = np.array([0.5, 0.5])
-        pred_label = true_label
+        pred_label = 0 if true_label is None else true_label
 
     # ── Classify patches ────────────────────────────────────────────────────
     HIGH         = 0.65
@@ -1074,6 +1132,7 @@ def view_pt_file(slide_choice, threshold):
     spatial      = _spatial_tumor_summary(coords_used, sal, threshold=HIGH)
     label_color  = '#e74c3c' if pred_label == 1 else '#27ae60'
     verdict_str  = '🔴 TUMOR DETECTED' if pred_label == 1 else '🟢 NORMAL TISSUE'
+    true_label_str = 'Unknown (no GT)' if true_label is None else slide_type
 
     # ── Figure: 3-panel ─────────────────────────────────────────────────────
     fig = plt.figure(figsize=(18, 7))
@@ -1148,7 +1207,7 @@ def view_pt_file(slide_choice, threshold):
     ax_info.axis('off'); ax_info.set_facecolor('#0d1520')
     lines = [
         ('Slide',         pt_path.stem[:22]),
-        ('True label',    slide_type),
+        ('True label',    true_label_str),
         ('Prediction',    '🔴 TUMOR' if pred_label==1 else '🟢 NORMAL'),
         ('Tumor prob',    f'{probs[1]*100:.1f}%'),
         ('',              ''),
@@ -1174,6 +1233,7 @@ def view_pt_file(slide_choice, threshold):
         ax_info.text(0.02, y_p, f'{k}:', fontsize=9, color='#8899aa',
                      transform=ax_info.transAxes, va='top')
         vc = (label_color if k == 'Prediction' else
+              '#aaaaaa' if k == 'True label' and true_label is None else
               '#e74c3c' if k == 'True label' and slide_type == 'Tumor' else
               '#27ae60' if k == 'True label' else '#e8eaf0')
         ax_info.text(0.02, y_p - 0.038, str(v), fontsize=9, fontweight='bold',

@@ -1,0 +1,20 @@
+{
+  "data_note": "FIXED: 221 labeled slides (removed 112 test_* unlabeled)",
+  "max_patches": 1024,
+  "classical": {
+    "val_auc": 0.658088,
+    "test_auc": 0.692042,
+    "gap": 0.033954,
+    "f1": 0.709677,
+    "sensitivity": 0.6471,
+    "specificity": 0.8235
+  },
+  "quantum_VQC": {
+    "val_auc": 0.650735,
+    "test_auc": 0.685121,
+    "gap": 0.034386,
+    "f1": 0.6875,
+    "sensitivity": 0.6471,
+    "specificity": 0.7647
+  }
+}

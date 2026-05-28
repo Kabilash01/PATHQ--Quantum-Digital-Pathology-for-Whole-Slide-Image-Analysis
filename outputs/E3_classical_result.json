@@ -1,0 +1,17 @@
+{
+  "experiment": "E3_classical_fixed",
+  "use_vqc": false,
+  "max_patches": 1024,
+  "dropout": 0.5,
+  "weight_decay": 0.01,
+  "label_smooth": 0.1,
+  "patience": 8,
+  "data_fix": "221 labeled slides (333 -> 221, removed 112 test_*)",
+  "auc": 0.688581,
+  "f1": 0.6875,
+  "loss": 0.702732,
+  "sensitivity": 0.6471,
+  "specificity": 0.7647,
+  "val_auc": 0.661765,
+  "gap": 0.026816
+}

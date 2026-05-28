@@ -1,0 +1,80 @@
+{
+  "best_alpha": 1.0,
+  "max_patches": 3000,
+  "quantum": {
+    "val_auc": 0.691176,
+    "test_auc": 0.681661,
+    "f1": 0.62069
+  },
+  "classical": {
+    "val_auc": 0.658088,
+    "test_auc": 0.692042,
+    "f1": 0.709677
+  },
+  "ensemble": {
+    "val_auc": 0.691176,
+    "test_auc": 0.681661,
+    "f1": 0.62069,
+    "sensitivity": 0.5294,
+    "specificity": 0.8235,
+    "gain_vs_quantum": 0.0,
+    "gain_vs_classical": -0.010381
+  },
+  "grid": [
+    {
+      "alpha": 0.0,
+      "val_auc": 0.658088,
+      "test_auc": 0.692042
+    },
+    {
+      "alpha": 0.1,
+      "val_auc": 0.661765,
+      "test_auc": 0.688581
+    },
+    {
+      "alpha": 0.2,
+      "val_auc": 0.665441,
+      "test_auc": 0.685121
+    },
+    {
+      "alpha": 0.3,
+      "val_auc": 0.661765,
+      "test_auc": 0.681661
+    },
+    {
+      "alpha": 0.4,
+      "val_auc": 0.658088,
+      "test_auc": 0.67474
+    },
+    {
+      "alpha": 0.5,
+      "val_auc": 0.658088,
+      "test_auc": 0.66782
+    },
+    {
+      "alpha": 0.6,
+      "val_auc": 0.665441,
+      "test_auc": 0.678201
+    },
+    {
+      "alpha": 0.7,
+      "val_auc": 0.658088,
+      "test_auc": 0.681661
+    },
+    {
+      "alpha": 0.8,
+      "val_auc": 0.676471,
+      "test_auc": 0.67474
+    },
+    {
+      "alpha": 0.9,
+      "val_auc": 0.680147,
+      "test_auc": 0.681661
+    },
+    {
+      "alpha": 1.0,
+      "val_auc": 0.691176,
+      "test_auc": 0.681661
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "experiment": "quantum_VQC_3000patches",
+  "use_vqc": true,
+  "n_qubits": 3,
+  "vqc_layers": 2,
+  "max_patches": 3000,
+  "dropout": 0.5,
+  "weight_decay": 0.01,
+  "label_smooth": 0.1,
+  "patience": 8,
+  "auc": 0.681661,
+  "f1": 0.62069,
+  "loss": 0.737921,
+  "sensitivity": 0.5294,
+  "specificity": 0.8235,
+  "val_auc": 0.691176,
+  "gap": -0.009515
+}

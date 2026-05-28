@@ -3,15 +3,17 @@ camelyon16/
 data/
 datas/
 notebooks/data/
+notebooks/datas/
+notebooks/outputs/
+notebooks/checkpoints/
 *.tif
 *.svs
 *.ndpi
+*.pt
+*.deb
 
-# Checkpoints and outputs
-#heckpoints/
-#utputs/
-#.pt
-#.pth
+# Checkpoints — keep only best models, ignore latest/training states
+checkpoints/*latest*.pth
 
 # Python
 __pycache__/
@@ -65,4 +67,6 @@ wandb/
 
 # Session state
 .copilot/
-notebooks/datas/
+
+# Artifacts
+=*

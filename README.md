@@ -230,8 +230,10 @@ numpy
 
 ## 👤 Author
 
-**Kabi** — Quantum Digital Pathology Project  
-Built with Claude Code (Anthropic)
+**Kabilash S** -kabilash0108@gmail.com
+**Pavitra P** -fspavitra11@gmail.com
+
+
 
 ---
 

@@ -37,7 +37,22 @@ warnings.filterwarnings('ignore')
 FEAT_DIR   = ROOT / 'notebooks' / 'data' / 'features_uni'
 CKPT_DIR   = ROOT / 'checkpoints'
 OUT_DIR    = ROOT / 'outputs'
+ANNO_DIR   = ROOT / 'camelyon16' / 'annotations'
 DEVICE     = torch.device('cpu')   # CPU for demo reliability
+
+# ── Test slide ground-truth (from annotation XMLs) ─────────────────────────────
+_GT_JSON = ROOT / 'camelyon16' / 'test_ground_truth.json'
+if _GT_JSON.exists():
+    with open(_GT_JSON) as _f:
+        TEST_GT: dict = json.load(_f)   # {'test_001_uni_features.pt': 1, ...}
+else:
+    # Fallback: derive live from annotation XMLs if JSON not present
+    TEST_GT = {}
+    if ANNO_DIR.exists():
+        _tumor_ids = {f.stem.split('_')[1] for f in ANNO_DIR.glob('test_*.xml')}
+        for _pt in FEAT_DIR.glob('test_*_uni_features.pt'):
+            _num = _pt.name.split('_')[1]
+            TEST_GT[_pt.name] = 1 if _num in _tumor_ids else 0
 
 # ── Checkpoint resolution ──────────────────────────────────────────────────────
 def _resolve_ckpt(candidates):
@@ -151,7 +166,13 @@ def run_prediction(slide_choice, threshold):
 
     idx = max(0, min(idx, len(files) - 1))
     pt_path = files[idx]
-    true_label = 0 if slide_type == 'Normal' else (None if slide_type == 'Test' else 1)
+    if slide_type == 'Normal':
+        true_label = 0
+    elif slide_type == 'Tumor':
+        true_label = 1
+    else:
+        # Test slide — look up from annotation-derived GT map
+        true_label = TEST_GT.get(pt_path.name, None)
 
     t0 = time.time()
     try:
@@ -760,7 +781,12 @@ def run_quantum_xai(slide_choice, threshold):
         files = tumors
     idx = max(0, min(idx, len(files) - 1))
     pt_path = files[idx]
-    true_label = 0 if slide_type == 'Normal' else (None if slide_type == 'Test' else 1)
+    if slide_type == 'Normal':
+        true_label = 0
+    elif slide_type == 'Tumor':
+        true_label = 1
+    else:
+        true_label = TEST_GT.get(pt_path.name, None)
 
     model = _get_quantum_model()
 
@@ -1082,7 +1108,12 @@ def view_pt_file(slide_choice, threshold):
         files = tumors_v
     idx = max(0, min(idx, len(files) - 1))
     pt_path = files[idx]
-    true_label = 0 if slide_type == 'Normal' else (None if slide_type == 'Test' else 1)
+    if slide_type == 'Normal':
+        true_label = 0
+    elif slide_type == 'Tumor':
+        true_label = 1
+    else:
+        true_label = TEST_GT.get(pt_path.name, None)
 
     # ── Load features ──────────────────────────────────────────────────────
     try:
@@ -1132,7 +1163,12 @@ def view_pt_file(slide_choice, threshold):
     spatial      = _spatial_tumor_summary(coords_used, sal, threshold=HIGH)
     label_color  = '#e74c3c' if pred_label == 1 else '#27ae60'
     verdict_str  = '🔴 TUMOR DETECTED' if pred_label == 1 else '🟢 NORMAL TISSUE'
-    true_label_str = 'Unknown (no GT)' if true_label is None else slide_type
+    if true_label is None:
+        true_label_str = 'Unknown (no GT)'
+    elif slide_type == 'Test':
+        true_label_str = f"{'Tumor' if true_label == 1 else 'Normal'} (test GT)"
+    else:
+        true_label_str = slide_type
 
     # ── Figure: 3-panel ─────────────────────────────────────────────────────
     fig = plt.figure(figsize=(18, 7))

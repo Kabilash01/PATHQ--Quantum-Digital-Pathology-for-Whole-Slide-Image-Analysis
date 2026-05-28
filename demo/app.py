@@ -41,7 +41,7 @@ ANNO_DIR   = ROOT / 'camelyon16' / 'annotations'
 DEVICE     = torch.device('cpu')   # CPU for demo reliability
 
 # ── Test slide ground-truth (from annotation XMLs) ─────────────────────────────
-_GT_JSON = ROOT / 'camelyon16' / 'test_ground_truth.json'
+_GT_JSON = ROOT / 'outputs' / 'test_ground_truth.json'
 if _GT_JSON.exists():
     with open(_GT_JSON) as _f:
         TEST_GT: dict = json.load(_f)   # {'test_001_uni_features.pt': 1, ...}
